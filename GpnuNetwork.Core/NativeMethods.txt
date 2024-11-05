@@ -1,0 +1,3 @@
+﻿WIN32_ERROR
+GetBestInterface
+GetAdaptersAddresses
