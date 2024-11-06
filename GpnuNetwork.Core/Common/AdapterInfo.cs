@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace GpnuNetwork.Core.Network.Common;
+namespace GpnuNetwork.Core.Common;
 
 public class AdapterInfo
 {

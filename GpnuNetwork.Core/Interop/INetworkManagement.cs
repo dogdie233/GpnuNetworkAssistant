@@ -1,4 +1,4 @@
-﻿using GpnuNetwork.Core.Network.Common;
+﻿using GpnuNetwork.Core.Common;
 
 namespace GpnuNetwork.Core.Interop;
 

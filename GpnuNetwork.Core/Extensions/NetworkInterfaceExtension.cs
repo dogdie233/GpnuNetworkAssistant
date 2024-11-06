@@ -4,7 +4,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
 
-namespace GpnuNetwork.Core.Helpers;
+namespace GpnuNetwork.Core.Extensions;
 
 public static class NetworkInterfaceExtension
 {

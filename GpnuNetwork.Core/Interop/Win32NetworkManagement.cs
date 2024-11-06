@@ -6,7 +6,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.NetworkManagement.IpHelper;
 
-using GpnuNetwork.Core.Network.Common;
+using GpnuNetwork.Core.Common;
 
 namespace GpnuNetwork.Core.Interop;
 

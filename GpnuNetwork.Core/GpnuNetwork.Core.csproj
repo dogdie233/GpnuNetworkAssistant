@@ -10,7 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <AdditionalFiles Include="NativeMethods.txt" />
+        <AdditionalFiles Include="NativeMethods.txt" />
     </ItemGroup>
 
     <ItemGroup>

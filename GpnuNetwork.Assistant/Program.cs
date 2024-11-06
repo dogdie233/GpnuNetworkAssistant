@@ -1,6 +1,12 @@
-﻿using System.Net.NetworkInformation;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 
 using GpnuNetwork.Assistant;
+using GpnuNetwork.Core.EPortalAuth;
+using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Helpers;
 
 using Spectre.Console;
@@ -68,30 +74,139 @@ AnsiConsole.MarkupLine($"已选择[green]{selectedInterface.Name}[/]适配器");
 
 #region Check Network
 
+NetworkCheckToolBox.CheckInternetResult internetCheckResult = NetworkCheckToolBox.CheckInternetResult.CreateSuccess();
 await AnsiConsole.Status()
     .StartAsync("正在检查网络连接...", async ctx =>
     {
         ctx.Spinner(Spinner.Known.Circle);
+
+        #region Check Internet
+
         ctx.Status("正在检测能否正常打开网页...");
 
         LogDebug($"向 {NetworkCheckToolBox.InternetCheckUrl} 发起http请求");
-        var internetCheckResult = await NetworkCheckToolBox.CheckInternet();
+        internetCheckResult = await NetworkCheckToolBox.CheckInternet();
         AnsiConsole.MarkupLine(internetCheckResult.Type switch
         {
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Success => "[green]测试连接正常[/]",
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Fail => $"[red]测试连接失败[/] {internetCheckResult.GetFailData().GetType().Name}: {internetCheckResult.GetFailData().Message}",
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Auth => $"[yellow]需要认证，认证网址：[/]{internetCheckResult.GetAuthData()}",
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Unknown => $"[yellow]未知错误[/] {internetCheckResult.GetUnknownData().StatusCode}",
-            _ => $"[yellow]未知测试结果 {internetCheckResult.Type}[/]"
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Success => "[green]√ 外网连接正常[/]",
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Fail => $"[red]× 外网连接失败 [/] {internetCheckResult.GetFailData()}",
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Auth => $"[yellow]? 需要认证，认证网址：[/]{internetCheckResult.GetAuthData()}",
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Unknown => $"[yellow]? 未知错误[/] {internetCheckResult.GetUnknownData().StatusCode}",
+            _ => $"[yellow]? 未知测试结果 {internetCheckResult.Type}[/]"
         });
+
+        #endregion
     });
+
+if (internetCheckResult.Type == NetworkCheckToolBox.CheckInternetResult.ResultType.Auth)
+{
+    var action = AnsiConsole.Prompt(
+        new SelectionPrompt<EnumChoice<AuthAction>>()
+            .Title("当前网络需要认证，是否进行认证")
+            .AddChoices(
+                new EnumChoice<AuthAction>(AuthAction.LoginByApi, "在本程序内登录"),
+                new EnumChoice<AuthAction>(AuthAction.OpenInBrowser | AuthAction.ExitProgram, "打开浏览器登录并退出本程序"),
+                new EnumChoice<AuthAction>(AuthAction.ExitProgram, "什么都不干退出程序")));
+
+    if (action.Value.HasFlag(AuthAction.OpenInBrowser))
+        Process.Start(internetCheckResult.GetAuthData().ToString());
+
+    if (action.Value.HasFlag(AuthAction.LoginByApi))
+    {
+        if (await DoAuthLogin(internetCheckResult.GetAuthData().ToString()) == false)
+            Exit();
+    }
+
+    if (action.Value.HasFlag(AuthAction.ExitProgram))
+        Exit();
+}
+
+
+await AnsiConsole.Status()
+    .StartAsync("正在检测网关连通性...", async ctx =>
+    {
+        ctx.Spinner(Spinner.Known.Circle);
+
+        #region Check Gateway
+
+        ctx.Status("正在检测网关连通性...");
+
+        // select the first ipv4 gateway, if not exist, select the first gateway
+        var gateway = selectedInterface.GetGateways().FirstOrDefault(IPAddressExtension.IsV4)
+                      ?? selectedInterface.GetGateways().FirstOrDefault();
+
+        if (gateway is not null)
+        {
+            var timeout = TimeSpan.FromSeconds(3);
+            const int count = 5;
+            LogDebug($"向 {gateway.ToString()} 发起 {count} 次ping请求，请求超时时间为 {timeout.TotalSeconds}s");
+            for (var i = 1; i <= count; i++)
+            {
+                var pingResult = await NetworkCheckToolBox.PingAsync(gateway, timeout, CancellationToken.None);
+                var success = pingResult is { IsSuccess: true, Data.Status: IPStatus.Success };
+                var reply = pingResult.Data;
+                AnsiConsole.Markup($"[[{i}/{count}]] ");
+                var msg = success
+                    ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]kb 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
+                    : $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
+                AnsiConsole.MarkupLine(msg);
+            }
+        }
+        else
+            AnsiConsole.MarkupLine("[red]× 不存在网关[/]");
+
+        #endregion
+    });
+
+Exit();
 
 #endregion
 
+static async Task<bool> DoAuthLogin(string authUrl)
+{
+    var username = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]用户名：[/]"));
+    var password = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]密  码：[/]").Secret());
+
+    var auth = AuthContext.Create(authUrl, true);
+    try
+    {
+        var (success, message) = await auth.LoginAsync(username, password);
+        AnsiConsole.MarkupLine(!success ? $"[red]× 登录失败：[/]{message}" : "[green]√ 登录成功[/]");
+        return success;
+    }
+    catch (Exception e)
+    {
+        AnsiConsole.MarkupLine($"[red]× 登录失败：[/]{e.Message}");
+        return false;
+    }
+}
+
 static void LogDebug(string message) => AnsiConsole.MarkupLine($"[grey][[debug]] {message}[/]");
 
+[DoesNotReturn]
+static void Exit()
+{
+    AnsiConsole.MarkupLine("[lime]程序运行结束，按任意键退出[/]");
+    Console.ReadKey();
+    Environment.Exit(0);
+}
+
+[Flags]
+public enum AuthAction
+{
+    None = 0,
+    LoginByApi = 1,
+    OpenInBrowser = 2,
+    ExitProgram = 4
+}
 
 internal readonly record struct InterfaceChoice(NetworkInterface Interface)
 {
-    public override string ToString() => $"[yellow]{Interface.NetworkInterfaceType.FriendlyOutput()}[/] 适配器 [green]{Interface.Name}[/]";
+    public override string ToString()
+        => $"[yellow]{Interface.NetworkInterfaceType.FriendlyOutput()}[/] 适配器 [green]{Interface.Name}[/]";
+}
+
+internal readonly record struct EnumChoice<T>(T Value, string Prompt) where T : Enum
+{
+    public override string ToString() => Prompt;
 }
