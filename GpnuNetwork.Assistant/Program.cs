@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
@@ -8,6 +7,7 @@ using GpnuNetwork.Assistant;
 using GpnuNetwork.Core.EPortalAuth;
 using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Helpers;
+using GpnuNetwork.Core.Utils;
 
 using Spectre.Console;
 
@@ -27,6 +27,7 @@ var selectedInterface = AnsiConsole.Prompt(
         .AddChoices(interfaces.Select(i => new InterfaceChoice(i)))).Interface;
 
 AnsiConsole.MarkupLine($"已选择[green]{selectedInterface.Name}[/]适配器");
+NetworkCheckToolBox.UsingInterface = selectedInterface;
 
 #endregion
 
@@ -89,8 +90,8 @@ await AnsiConsole.Status()
         AnsiConsole.MarkupLine(internetCheckResult.Type switch
         {
             NetworkCheckToolBox.CheckInternetResult.ResultType.Success => "[green]√ 外网连接正常[/]",
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Fail => $"[red]× 外网连接失败 [/] {internetCheckResult.GetFailData()}",
-            NetworkCheckToolBox.CheckInternetResult.ResultType.Auth => $"[yellow]? 需要认证，认证网址：[/]{internetCheckResult.GetAuthData()}",
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Fail => $"[red]× 外网连接失败 [/] {FriendlyNetworkExceptionMessage(internetCheckResult.GetFailData())}",
+            NetworkCheckToolBox.CheckInternetResult.ResultType.Auth => $"[yellow]? 需要认证，认证网址：[/]{internetCheckResult.GetAuthData().ToString().EscapeMarkup()}",
             NetworkCheckToolBox.CheckInternetResult.ResultType.Unknown => $"[yellow]? 未知错误[/] {internetCheckResult.GetUnknownData().StatusCode}",
             _ => $"[yellow]? 未知测试结果 {internetCheckResult.Type}[/]"
         });
@@ -182,6 +183,27 @@ static async Task<bool> DoAuthLogin(string authUrl)
 }
 
 static void LogDebug(string message) => AnsiConsole.MarkupLine($"[grey][[debug]] {message}[/]");
+
+static string FriendlyNetworkExceptionMessage(Exception ex)
+{
+    var socketException = ex.ExpandTreeDeepFirst(e => e.InnerException is not null ? [e.InnerException] : [])
+        .OfType<SocketException>()
+        .FirstOrDefault();
+
+    if (socketException is not null)
+    {
+        return "Socket Exception: " + socketException.SocketErrorCode switch
+        {
+            SocketError.HostNotFound => "找不到主机",
+            SocketError.ConnectionRefused => "连接被拒绝",
+            SocketError.NetworkUnreachable => "网络不可达",
+            SocketError.TimedOut => "连接超时",
+            _ => ex.Message
+        };
+    }
+
+    return $"{ex.GetType().Name}: {ex.Message}";
+}
 
 [DoesNotReturn]
 static void Exit()
