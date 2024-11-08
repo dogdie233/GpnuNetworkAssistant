@@ -1,29 +1,66 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Mime;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
+using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Utils;
 
 namespace GpnuNetwork.Core.Helpers;
 
 public static partial class NetworkCheckToolBox
 {
+    private static readonly SocketsHttpHandler _httpHandler;
+    private static readonly HttpClient _notRedirectClient;
+    private static NetworkInterface? _usingInterface = null;
+
     /// <summary>
     /// It should be an url that will return 204 status code if the internet is available.
     /// Can't use https is because computer may not trust AC's certificate.
     /// </summary>
-    public static Uri InternetCheckUrl { get; set; } = new Uri("http://connect.rom.miui.com/generate_204");
+    public static Uri InternetCheckUrl { get; set; } = new("http://connect.rom.miui.com/generate_204");
 
-
-    private static readonly HttpClient notRedirectClient = new(new HttpClientHandler()
+    public static NetworkInterface? UsingInterface
     {
-        AllowAutoRedirect = false,
-    });
+        get => _usingInterface;
+        set
+        {
+            _usingInterface = value;
+            _httpHandler.ConnectCallback = value is null ? null : HttpConnectCallback;
+        }
+    }
+
+
+    static NetworkCheckToolBox()
+    {
+        _httpHandler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+        };
+        _notRedirectClient = new HttpClient(_httpHandler);
+    }
 
     [GeneratedRegex("\\.href=['\"](.+?)['\"]")]
     private static partial Regex FindAuthUrlRegex();
+
+    private static async ValueTask<Stream> HttpConnectCallback(SocketsHttpConnectionContext context, CancellationToken ct)
+    {
+        var remoteAddress = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, context.DnsEndPoint.AddressFamily, ct);
+        var addrFamily = context.DnsEndPoint.AddressFamily is not AddressFamily.Unspecified
+            ? context.DnsEndPoint.AddressFamily
+            : (remoteAddress.Any(IPAddressExtension.IsV4) ? AddressFamily.InterNetwork : AddressFamily.InterNetworkV6);
+
+        var localAddress = UsingInterface?.GetIPProperties().UnicastAddresses
+            .FirstOrDefault(addr => addr.Address.AddressFamily == addrFamily)?.Address;
+        localAddress ??= addrFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
+        var socket = new Socket(addrFamily, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(localAddress, 0));
+        await socket.ConnectAsync(remoteAddress.Where(ip => ip.AddressFamily == addrFamily).ToArray(), context.DnsEndPoint.Port, ct);
+        return new NetworkStream(socket, ownsSocket: true);
+    }
 
     /// <summary>
     /// 判断是否可以连通外网
@@ -32,7 +69,7 @@ public static partial class NetworkCheckToolBox
     {
         try
         {
-            var response = await notRedirectClient.GetAsync(InternetCheckUrl);
+            var response = await _notRedirectClient.GetAsync(InternetCheckUrl);
 
             // if the status code is 204, it means the internet is available
             if (response.StatusCode == HttpStatusCode.NoContent)

@@ -1,3 +1,16 @@
 ﻿WIN32_ERROR
+GetLastError
+
 GetBestInterface
 GetAdaptersAddresses
+
+ICMP_ECHO_REPLY
+ICMPV6_ECHO_REPLY_LH
+IcmpCreateFile
+Icmp6CreateFile
+IcmpCloseHandle
+IcmpSendEcho2
+IcmpSendEcho2Ex
+Icmp6SendEcho2
+Icmp6ParseReplies
+IcmpParseReplies

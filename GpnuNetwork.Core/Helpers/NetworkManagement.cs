@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics.Contracts;
 using System.Net.NetworkInformation;
 
+using GpnuNetwork.Core.Common;
 using GpnuNetwork.Core.Interop;
 
 namespace GpnuNetwork.Core.Helpers;
