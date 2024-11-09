@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
 using Windows.Win32;
+using Windows.Win32.Foundation;
 using Windows.Win32.Networking.WinSock;
 using Windows.Win32.NetworkManagement.IpHelper;
 
@@ -50,6 +51,8 @@ public abstract class Win32IcmpApi : IIcmpApi
                 Flags = (byte)(pingEx.Options.DontFragment ? 2 : 0)
             };
 
+        pingEx.RegisterCallback(ReplyCallback);
+
         /* we use new byte[0] but not null because the fixed statement requires a not null array
          * not use Array.Empty<byte>() is because we don't want to fix a shared array
          * collection expression `[]` will be converted to Array.Empty<T>() by the compiler, so we also don't use it
@@ -70,12 +73,33 @@ public abstract class Win32IcmpApi : IIcmpApi
 
         if (reply)
             pingEx.replyBuffer.DangerousRelease();
+
         if (!sendSuccess)
-            throw new Win32Exception(Marshal.GetLastWin32Error());
+        {
+            var error = Marshal.GetLastPInvokeError();
+            if (error == (int)WIN32_ERROR.ERROR_IO_PENDING)
+                sendSuccess = true;
+            else
+                throw new Win32Exception(error);
+        }
+    }
+
+    private static unsafe void ReplyCallback(PingEx pingEx)
+    {
+        if (pingEx.replyBuffer is null)
+            throw new InvalidOperationException("Reply buffer is null");
+
+        pingEx.SetResult(pingEx.Destination.AddressFamily switch
+        {
+            AddressFamily.InterNetwork => CreatePingReplyFromIcmpEchoReply(*(ICMP_ECHO_REPLY*)pingEx.replyBuffer.DangerousGetHandle()),
+            AddressFamily.InterNetworkV6 => CreatePingReplyFromIcmp6EchoReply(*(ICMPV6_ECHO_REPLY_LH*)pingEx.replyBuffer.DangerousGetHandle(), pingEx.replyBuffer.DangerousGetHandle(), pingEx.Buffer?.Length ?? 0),
+            _ => throw new NotSupportedException("Unsupported address family")
+        });
     }
 
     private static unsafe bool SendEcho(IcmpCloseHandleSafeHandle handler, SafeHandle @event, IPAddress? source, IPAddress destination, byte[] sendBuffer, void* replyBuffer, uint replyBufferSize, in IP_OPTION_INFORMATION? options, uint timeout, out uint recvNumber)
     {
+        // TODO: We have to copy the buffer to unmanaged memory because the buffer may be moved by GC
         if (destination.IsV6())
         {
             var sourceAddress = (source ?? IPAddress.IPv6Any).ToWinSockAddrIn6();

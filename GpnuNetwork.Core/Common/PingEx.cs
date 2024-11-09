@@ -11,8 +11,9 @@ public partial class PingEx
 {
     public static TimeSpan DefaultTimeout { get; } = TimeSpan.FromSeconds(30);
 
-    private bool sent = false;
-    private readonly TaskCompletionSource<PingReply> _tcs;
+    private bool _sent = false;
+    private readonly TaskCompletionSource<PingExReply> _tcs;
+    private RegisteredWaitHandle? _waitHandle;
     internal SafeHandle? icmpHandler = null;
     internal ManualResetEvent icmpEvent = new (false);
     internal UnmanagedMemorySafeHandle? replyBuffer = null;
@@ -31,23 +32,42 @@ public partial class PingEx
         Buffer = buffer;
         Options = options;
 
-        _tcs = new TaskCompletionSource<PingReply>();
+        _tcs = new TaskCompletionSource<PingExReply>();
     }
 
-    public Task<PingReply> SendAsync(CancellationToken ct)
+    public Task<PingExReply> SendAsync(CancellationToken ct)
     {
-        if (Interlocked.CompareExchange(ref sent, true, true))
+        if (Interlocked.CompareExchange(ref _sent, true, true))
             throw new InvalidOperationException("Ping operation already sent");
 
         IcmpApi.InitPingEx(this);
-
+        IcmpApi.SendPingEx(this);
+        // TODO: Implement cancellation and timeout
+        // TODO: Do cleanup
         return _tcs.Task;
     }
 
-    internal void SetResult(PingReply reply)
+    internal void SetResult(PingExReply reply)
     {
         _tcs.TrySetResult(reply);
     }
+
+    internal void RegisterCallback(Action<PingEx> callback)
+    {
+        _waitHandle = ThreadPool.RegisterWaitForSingleObject(icmpEvent, (state, _) => callback((PingEx)state), this, -1, true);
+    }
+
+    private void OnCancelled()
+    {
+
+    }
+
+    private void Cleanup()
+    {
+        _waitHandle?.Unregister(icmpEvent);
+    }
+
+    // TODO: Allow ping a host by hostname
 
     public static PingEx Create(IPAddress dest, IPAddress? source = null, byte[]? buffer = null, PingOptions? options = null)
     {
@@ -62,12 +82,12 @@ public partial class PingEx
         return new PingEx(dest, timeout, source, buffer, options);
     }
 
-    public static Task<PingReply> PingAsync(IPAddress dest, IPAddress? source = null, byte[]? buffer = null, PingOptions? options = null, CancellationToken ct = default)
+    public static Task<PingExReply> PingAsync(IPAddress dest, IPAddress? source = null, byte[]? buffer = null, PingOptions? options = null, CancellationToken ct = default)
     {
         return PingAsync(dest, DefaultTimeout, source, buffer, options, ct);
     }
     
-    public static Task<PingReply> PingAsync(IPAddress dest, TimeSpan timeout, IPAddress? source, byte[]? buffer = null, PingOptions? options = null, CancellationToken ct = default)
+    public static Task<PingExReply> PingAsync(IPAddress dest, TimeSpan timeout, IPAddress? source, byte[]? buffer = null, PingOptions? options = null, CancellationToken ct = default)
     {
         var ping = Create(dest, timeout, source, buffer, options);
         return ping.SendAsync(ct);
