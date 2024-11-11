@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
+using GpnuNetwork.Core.Common;
 using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Utils;
 
@@ -134,15 +135,11 @@ public static partial class NetworkCheckToolBox
         public static CheckInternetResult CreateUnknown(HttpResponseMessage response) => new(ResultType.Unknown, response);
     }
 
-    public static Task<Defender.CatchResult<PingReply>> PingAsync(string host, TimeSpan timeout, CancellationToken ct)
-    {
-        var ping = new Ping();
-        return Defender.TryAsync(ctk => ping.SendPingAsync(host, timeout, cancellationToken: ctk), ct);
-    }
 
-    public static Task<Defender.CatchResult<PingReply>> PingAsync(IPAddress addr, TimeSpan timeout, CancellationToken ct)
+    public static Task<Defender.CatchResult<PingExReply>> PingAsync(IPAddress dest, IPAddress? source, TimeSpan timeout, CancellationToken ct)
     {
-        var ping = new Ping();
-        return Defender.TryAsync(ctk => ping.SendPingAsync(addr, timeout, cancellationToken: ctk), ct);
+        var ping = PingEx.Create(dest, timeout, source);
+        ping.Init();
+        return Defender.TryAsync(ctk => ping.SendAsync(ctk), ct);
     }
 }

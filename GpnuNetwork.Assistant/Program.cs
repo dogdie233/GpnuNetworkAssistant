@@ -4,6 +4,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 using GpnuNetwork.Assistant;
+using GpnuNetwork.Core.Common;
 using GpnuNetwork.Core.EPortalAuth;
 using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Helpers;
@@ -138,17 +139,19 @@ await AnsiConsole.Status()
 
         if (gateway is not null)
         {
+            var source = selectedInterface.GetIPProperties().UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == gateway.AddressFamily)?.Address;
             var timeout = TimeSpan.FromSeconds(3);
             const int count = 5;
-            LogDebug($"向 {gateway.ToString()} 发起 {count} 次ping请求，请求超时时间为 {timeout.TotalSeconds}s");
+            AnsiConsole.MarkupLine($"{(source is not null ? $"从 [aqua]{source} [/]" : "" )}向 [aqua]{gateway}[/] 发起 [yellow]{count}[/] 次ping请求，请求超时时间为 [yellow]{timeout.TotalSeconds}[/]s");
             for (var i = 1; i <= count; i++)
             {
-                var pingResult = await NetworkCheckToolBox.PingAsync(gateway, timeout, CancellationToken.None);
+                var pingResult = await NetworkCheckToolBox.PingAsync(gateway, source, timeout, CancellationToken.None);
                 var success = pingResult is { IsSuccess: true, Data.Status: IPStatus.Success };
                 var reply = pingResult.Data;
+
                 AnsiConsole.Markup($"[[{i}/{count}]] ");
                 var msg = success
-                    ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]kb 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
+                    ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]B 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
                     : $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
                 AnsiConsole.MarkupLine(msg);
             }

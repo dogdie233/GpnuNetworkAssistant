@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace GpnuNetwork.Core.Utils;
 
@@ -10,7 +11,9 @@ public class UnmanagedMemorySafeHandle : SafeHandle
 
     protected override bool ReleaseHandle()
     {
+        Debugger.Break();
         Marshal.FreeHGlobal(handle);
+        // handle = nint.Zero;
         return true;
     }
 
