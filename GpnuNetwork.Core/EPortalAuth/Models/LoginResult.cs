@@ -14,8 +14,7 @@ public class LoginResult
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true,
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Serialization)]
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(LoginResult))]
 public partial class LoginResultContext : JsonSerializerContext
 {

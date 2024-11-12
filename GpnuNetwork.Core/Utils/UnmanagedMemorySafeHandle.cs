@@ -11,7 +11,6 @@ public class UnmanagedMemorySafeHandle : SafeHandle
 
     protected override bool ReleaseHandle()
     {
-        Debugger.Break();
         Marshal.FreeHGlobal(handle);
         // handle = nint.Zero;
         return true;

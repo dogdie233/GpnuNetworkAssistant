@@ -49,7 +49,7 @@ public static partial class NetworkCheckToolBox
 
     private static async ValueTask<Stream> HttpConnectCallback(SocketsHttpConnectionContext context, CancellationToken ct)
     {
-        var remoteAddress = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, context.DnsEndPoint.AddressFamily, ct);
+        var remoteAddress = (await Dns.GetHostEntryAsync(context.DnsEndPoint.Host, context.DnsEndPoint.AddressFamily, ct)).AddressList;
         var addrFamily = context.DnsEndPoint.AddressFamily is not AddressFamily.Unspecified
             ? context.DnsEndPoint.AddressFamily
             : (remoteAddress.Any(IPAddressExtension.IsV4) ? AddressFamily.InterNetwork : AddressFamily.InterNetworkV6);
@@ -58,7 +58,7 @@ public static partial class NetworkCheckToolBox
             .FirstOrDefault(addr => addr.Address.AddressFamily == addrFamily)?.Address;
         localAddress ??= addrFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any;
         var socket = new Socket(addrFamily, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(localAddress, 0));
+        // socket.Bind(new IPEndPoint(localAddress, 0));
         await socket.ConnectAsync(remoteAddress.Where(ip => ip.AddressFamily == addrFamily).ToArray(), context.DnsEndPoint.Port, ct);
         return new NetworkStream(socket, ownsSocket: true);
     }

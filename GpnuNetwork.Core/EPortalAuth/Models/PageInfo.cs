@@ -9,8 +9,7 @@ public class PageInfo
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true,
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Serialization)]
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(PageInfo))]
 public partial class PageInfoContext : JsonSerializerContext
 {

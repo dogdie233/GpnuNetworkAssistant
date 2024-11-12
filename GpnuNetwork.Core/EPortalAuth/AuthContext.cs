@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Json;
+using System.Web;
 
 using GpnuNetwork.Core.EPortalAuth.Models;
 using GpnuNetwork.Core.Utils;
@@ -12,10 +13,10 @@ public class AuthContext
     private readonly HttpClient _httpClient;
     private bool _usePasswordEncrypt;
 
-    private AuthContext(string authUrl, bool usePasswordEncrypt = true)
+    private AuthContext(string authUrl, bool usePasswordEncrypt = true) : this(new Uri(authUrl), usePasswordEncrypt){}
+    private AuthContext(Uri authUri, bool usePasswordEncrypt = true)
     {
-        var authUri = new Uri(authUrl);
-        _queryString = authUri.Query is { Length: > 0 } ? authUri.Query : null;
+        _queryString = authUri.Query is { Length: > 0 } ? authUri.Query[1..] : null;
 
         var baseUri = new Uri(authUri.GetLeftPart(UriPartial.Authority));
         _httpClient = new HttpClient()
@@ -49,7 +50,8 @@ public class AuthContext
 
         if (exponent is not null && modulus is not null)
         {
-            password = EncryptHelper.RsaEncrypt(password, exponent, modulus);
+            var mac = HttpUtility.ParseQueryString(_queryString ?? string.Empty).Get("mac") ?? "111111111";
+            password = EncryptHelper.AuthPasswordEncrypt(password, mac, exponent, modulus);
             encrypted = true;
         }
 
@@ -62,7 +64,7 @@ public class AuthContext
             { "operatorPwd", string.Empty },
             { "operatorUserId", string.Empty },
             { "validcode", string.Empty },
-            { "passwordEncrypt", encrypted.ToString() }
+            { "passwordEncrypt", encrypted.ToString().ToLower() }
         });
 
         using var res = await _httpClient.PostAsync("eportal/InterFace.do?method=login", content);
@@ -72,6 +74,12 @@ public class AuthContext
             return (false, "Invalid return content");
 
         return (loginResult.Result == "success", loginResult.Message);
+    }
+
+    public static AuthContext Create(Uri authUri, bool usePasswordEncrypt = true)
+    {
+        var context = new AuthContext(authUri, usePasswordEncrypt);
+        return context;
     }
 
     public static AuthContext Create(string authUrl, bool usePasswordEncrypt = true)
