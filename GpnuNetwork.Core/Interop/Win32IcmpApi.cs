@@ -103,7 +103,7 @@ public abstract class Win32IcmpApi : IIcmpApi
         return new PingExReply(address, pingOptions, statusFromCode, rrt, replyData);
     }
 
-    private static PingExReply CreatePingReplyFromIcmp6EchoReply(in ICMPV6_ECHO_REPLY_LH reply, IntPtr dataPtr, int sendSize)
+    private static PingExReply CreatePingReplyFromIcmp6EchoReply(in ICMPV6_ECHO_REPLY_LH reply, IntPtr dataPtr, int sentPayloadSize)
     {
         var address = new IPAddress(MemoryMarshal.Cast<ushort, byte>(reply.Address.sin6_addr.AsReadOnlySpan()), reply.Address.sin6_scope_id);
         var statusFromCode = GetStatusFromCode((int) reply.Status);
@@ -112,8 +112,8 @@ public abstract class Win32IcmpApi : IIcmpApi
         if (statusFromCode == IPStatus.Success)
         {
             rtt = reply.RoundTripTime;
-            replyData = new byte[sendSize];
-            Marshal.Copy(dataPtr + new IntPtr(36), replyData, 0, sendSize);
+            replyData = new byte[sentPayloadSize];
+            Marshal.Copy(dataPtr + new IntPtr(36), replyData, 0, sentPayloadSize);
         }
         else
         {
