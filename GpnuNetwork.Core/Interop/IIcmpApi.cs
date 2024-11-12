@@ -13,6 +13,6 @@ public interface IIcmpApi
     public static abstract void SendEcho(SafeHandle? icmpHandle, SafeHandle callback,
         IPAddress destination, IPAddress source, nint payload, int payloadSize, nint replyBuffer, int replyBufferSize,
         PingOptions? options, int timeout);
-    public static abstract PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize);
+    public static abstract PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize, int sentPayloadSize);
     public static abstract void DisposePingEx(bool isIpv6, ref SafeHandle? icmpHandle);
 }

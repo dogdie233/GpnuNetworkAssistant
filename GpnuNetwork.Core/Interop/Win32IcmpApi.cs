@@ -64,10 +64,10 @@ public abstract class Win32IcmpApi : IIcmpApi
             throw new Win32Exception(error);
     }
 
-    public static unsafe PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize)
+    public static unsafe PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize, int sentPayloadSize)
     {
         return isIpv6
-            ? CreatePingReplyFromIcmp6EchoReply(*(ICMPV6_ECHO_REPLY_LH*)replyBuffer.DangerousGetHandle(), replyBuffer.DangerousGetHandle(), replyBufferSize)
+            ? CreatePingReplyFromIcmp6EchoReply(*(ICMPV6_ECHO_REPLY_LH*)replyBuffer.DangerousGetHandle(), replyBuffer.DangerousGetHandle(), sentPayloadSize)
             : CreatePingReplyFromIcmpEchoReply(*(ICMP_ECHO_REPLY*)replyBuffer.DangerousGetHandle());
     }
 
@@ -103,24 +103,24 @@ public abstract class Win32IcmpApi : IIcmpApi
         return new PingExReply(address, pingOptions, statusFromCode, rrt, replyData);
     }
 
-    private static PingExReply CreatePingReplyFromIcmp6EchoReply(in ICMPV6_ECHO_REPLY_LH reply, IntPtr dataPtr,  int sendSize)
+    private static PingExReply CreatePingReplyFromIcmp6EchoReply(in ICMPV6_ECHO_REPLY_LH reply, IntPtr dataPtr, int sendSize)
     {
         var address = new IPAddress(MemoryMarshal.Cast<ushort, byte>(reply.Address.sin6_addr.AsReadOnlySpan()), reply.Address.sin6_scope_id);
         var statusFromCode = GetStatusFromCode((int) reply.Status);
-        long rrt;
+        long rtt;
         byte[] replyData;
         if (statusFromCode == IPStatus.Success)
         {
-            rrt = reply.RoundTripTime;
+            rtt = reply.RoundTripTime;
             replyData = new byte[sendSize];
             Marshal.Copy(dataPtr + new IntPtr(36), replyData, 0, sendSize);
         }
         else
         {
-            rrt = 0L;
+            rtt = 0L;
             replyData = [];
         }
-        return new PingExReply(address, null, statusFromCode, rrt, replyData);
+        return new PingExReply(address, null, statusFromCode, rtt, replyData);
     }
 
     private static IPStatus GetStatusFromCode(int statusCode)

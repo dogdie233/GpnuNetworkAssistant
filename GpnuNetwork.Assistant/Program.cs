@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
@@ -125,36 +126,28 @@ if (internetCheckResult.Type == NetworkCheckToolBox.CheckInternetResult.ResultTy
 
 
 await AnsiConsole.Status()
-    .StartAsync("正在检测网关连通性...", async ctx =>
+    .StartAsync("正在检测网络连通性...", async ctx =>
     {
         ctx.Spinner(Spinner.Known.Circle);
 
         #region Check Gateway
 
-        ctx.Status("正在检测网关连通性...");
-
-        // select the first ipv4 gateway, if not exist, select the first gateway
-        var gateway = selectedInterface.GetGateways().FirstOrDefault(IPAddressExtension.IsV4)
-                      ?? selectedInterface.GetGateways().FirstOrDefault();
-
-        if (gateway is not null)
+        if (selectedInterface.GetGateways().Length > 0)
         {
-            var source = selectedInterface.GetIPProperties().UnicastAddresses.FirstOrDefault(ip => ip.Address.AddressFamily == gateway.AddressFamily)?.Address;
-            var timeout = TimeSpan.FromSeconds(3);
-            const int count = 5;
-            AnsiConsole.MarkupLine($"{(source is not null ? $"从 [aqua]{source} [/]" : "" )}向 [aqua]{gateway}[/] 发起 [yellow]{count}[/] 次ping请求，请求超时时间为 [yellow]{timeout.TotalSeconds}[/]s");
-            for (var i = 1; i <= count; i++)
-            {
-                var pingResult = await NetworkCheckToolBox.PingAsync(gateway, source, timeout, CancellationToken.None);
-                var success = pingResult is { IsSuccess: true, Data.Status: IPStatus.Success };
-                var reply = pingResult.Data;
+            var gateway = selectedInterface.GetGateways().FirstOrDefault(IPAddressExtension.IsV4);
+            var address = selectedInterface.GetIpv4Address().FirstOrDefault();
+            if (gateway is not null && address is not null)
+                await DoPing(address, gateway, 5, TimeSpan.FromSeconds(5));
+            else
+                AnsiConsole.MarkupLine("[yellow]? 不存在ipv4地址或网关，跳过[/]");
 
-                AnsiConsole.Markup($"[[{i}/{count}]] ");
-                var msg = success
-                    ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]B 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
-                    : $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
-                AnsiConsole.MarkupLine(msg);
-            }
+            gateway = selectedInterface.GetGateways().FirstOrDefault(IPAddressExtension.IsV6);
+            address = selectedInterface.GetIPProperties().UnicastAddresses.FirstOrDefault(ip => ip.Address.IsV6() && ip.Address.IsIPv6LinkLocal)?.Address;
+
+            if (gateway is not null && address is not null)
+                await DoPing(address, gateway, 5, TimeSpan.FromSeconds(5));
+            else
+                AnsiConsole.MarkupLine("[yellow]? 不存在ipv6地址或网关，跳过[/]");
         }
         else
             AnsiConsole.MarkupLine("[red]× 不存在网关[/]");
@@ -182,6 +175,23 @@ static async Task<bool> DoAuthLogin(string authUrl)
     {
         AnsiConsole.MarkupLine($"[red]× 登录失败：[/]{e.Message}");
         return false;
+    }
+}
+
+static async Task DoPing(IPAddress? src, IPAddress dest, int count, TimeSpan timeout)
+{
+    AnsiConsole.MarkupLine($"正在{(src is not null ? $"从 [aqua]{src}[/] " : "")}向 [aqua]{dest}[/] 发起 [yellow]{count}[/] 次ping请求，请求超时时间为 [yellow]{timeout.TotalSeconds}[/]s");
+    for (var i = 1; i <= count; i++)
+    {
+        var pingResult = await NetworkCheckToolBox.PingAsync(dest, src, timeout, CancellationToken.None);
+        var success = pingResult is { IsSuccess: true, Data.Status: IPStatus.Success };
+        var reply = pingResult.Data;
+
+        AnsiConsole.Markup($"[[{i}/{count}]] ");
+        var msg = success
+            ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]Bytes 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
+            : $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
+        AnsiConsole.MarkupLine(msg);
     }
 }
 

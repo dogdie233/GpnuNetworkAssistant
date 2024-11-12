@@ -168,7 +168,7 @@ public class PingEx
 
         try
         {
-            var result = IcmpApi.ParseReply(instance.Destination.IsV6(), instance.replyBuffer, instance.replyBufferSize);
+            var result = IcmpApi.ParseReply(instance.Destination.IsV6(), instance.replyBuffer, instance.replyBufferSize, instance.EchoPayload.Length);
             instance._tcs.TrySetResult(result);
         }
         catch (Exception e)

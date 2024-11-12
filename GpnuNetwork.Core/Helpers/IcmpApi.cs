@@ -23,8 +23,8 @@ public class IcmpApi : IIcmpApi
     public static void SendEcho(SafeHandle? icmpHandle, SafeHandle callback, IPAddress destination, IPAddress source, nint payload, int payloadSize, nint replyBuffer, int replyBufferSize, PingOptions? options, int timeout)
         => IcmpApiImpl.SendEcho(icmpHandle, callback, destination, source, payload, payloadSize, replyBuffer, replyBufferSize, options, timeout);
 
-    public static PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize)
-        => IcmpApiImpl.ParseReply(isIpv6, replyBuffer, replyBufferSize);
+    public static PingExReply ParseReply(bool isIpv6, UnmanagedMemorySafeHandle replyBuffer, int replyBufferSize, int sentPayloadSize)
+        => IcmpApiImpl.ParseReply(isIpv6, replyBuffer, replyBufferSize, sentPayloadSize);
 
     public static void DisposePingEx(bool isIpv6, ref SafeHandle? icmpHandle)
         => IcmpApiImpl.DisposePingEx(isIpv6, ref icmpHandle);
