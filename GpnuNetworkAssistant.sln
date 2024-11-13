@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GpnuNetwork.Core", "GpnuNet
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthOfflineNoMore", "AuthOfflineNoMore\AuthOfflineNoMore.csproj", "{FB78C0DA-5C54-46C3-A38E-AF3404B901FD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClashTunBypassTest", "ClashTunBypassTest\ClashTunBypassTest.csproj", "{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,13 @@ Global
 		{FB78C0DA-5C54-46C3-A38E-AF3404B901FD}.Release|Any CPU.Build.0 = Release|Any CPU
 		{FB78C0DA-5C54-46C3-A38E-AF3404B901FD}.Release|win-x64.ActiveCfg = Release|Any CPU
 		{FB78C0DA-5C54-46C3-A38E-AF3404B901FD}.Release|win-x64.Build.0 = Release|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Debug|win-x64.ActiveCfg = Debug|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Debug|win-x64.Build.0 = Debug|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Release|win-x64.ActiveCfg = Release|Any CPU
+		{19188D89-F77D-42C3-BD1D-0AC7B166F2C4}.Release|win-x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
