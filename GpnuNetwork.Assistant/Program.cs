@@ -5,7 +5,6 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
 using GpnuNetwork.Assistant;
-using GpnuNetwork.Core.Common;
 using GpnuNetwork.Core.EPortalAuth;
 using GpnuNetwork.Core.Extensions;
 using GpnuNetwork.Core.Helpers;
@@ -77,14 +76,13 @@ NetworkCheckToolBox.UsingInterface = selectedInterface;
 
 #region Check Network
 
+#region Check Internel
+
 NetworkCheckToolBox.CheckInternetResult internetCheckResult = NetworkCheckToolBox.CheckInternetResult.CreateSuccess();
 await AnsiConsole.Status()
     .StartAsync("正在检查网络连接...", async ctx =>
     {
         ctx.Spinner(Spinner.Known.Circle);
-
-        #region Check Internet
-
         ctx.Status("正在检测能否正常打开网页...");
 
         LogDebug($"向 {NetworkCheckToolBox.InternetCheckUrl} 发起http请求");
@@ -97,9 +95,11 @@ await AnsiConsole.Status()
             NetworkCheckToolBox.CheckInternetResult.ResultType.Unknown => $"[yellow]? 未知错误[/] {internetCheckResult.GetUnknownData().StatusCode}",
             _ => $"[yellow]? 未知测试结果 {internetCheckResult.Type}[/]"
         });
-
-        #endregion
     });
+
+#endregion
+
+#region Ask Auth
 
 if (internetCheckResult.Type == NetworkCheckToolBox.CheckInternetResult.ResultType.Auth)
 {
@@ -124,20 +124,58 @@ if (internetCheckResult.Type == NetworkCheckToolBox.CheckInternetResult.ResultTy
         Exit();
 }
 
+#endregion
 
 await AnsiConsole.Status()
     .StartAsync("正在检测网络连通性...", async ctx =>
     {
         ctx.Spinner(Spinner.Known.Circle);
 
-        #region Check Gateway
+        {
+            AnsiConsole.MarkupLine("正在检测DNS解析");
+            var host = NetworkCheckToolBox.InternetCheckUrl.Host;
+            LogDebug($"通过系统接口解析 {host}");
+            var addressListResult = await Defender.TryAsync(() => Dns.GetHostAddressesAsync(host));
+            if (addressListResult.IsSuccess)
+            {
+                if (addressListResult.Data is { Length: > 0 } addressList)
+                {
+                    AnsiConsole.MarkupLine($"[green]√ 解析到[yellow]{addressList.Length}[/]个地址[/]");
+                    LogDebug($"解析到的地址：{string.Join('，', addressList.AsEnumerable())}");
 
+                    var dest = addressList.FirstOrDefault(IPAddressExtension.IsV4);
+                    var src = selectedInterface.GetIpv4Address().FirstOrDefault();
+
+                    if (dest is not null && src is not null)
+                        await DoPing(src, dest, 3, TimeSpan.FromSeconds(20));
+                    else
+                        AnsiConsole.MarkupLine("[yellow]? 不存在ipv4地址或解析地址，跳过ping测试[/]");
+
+                    dest = addressList.FirstOrDefault(IPAddressExtension.IsV6);
+                    src = selectedInterface.GetIpv6Address().FirstOrDefault();
+
+                    if (dest is not null && src is not null)
+                        await DoPing(src, dest, 3, TimeSpan.FromSeconds(20));
+                    else
+                        AnsiConsole.MarkupLine("[yellow]? 不存在ipv6地址或解析地址，跳过ping测试[/]");
+                }
+                else
+                    AnsiConsole.MarkupLine($"[red]× 无法解析主机名[/] [aqua]{host}[/]");
+            }
+            else
+                AnsiConsole.MarkupLine($"[red]× 解析 [aqua]{host}[/] 的地址时发生异常：{FriendlyNetworkExceptionMessage(addressListResult.Exception)}[/]");
+        }
+
+
+        #region Check Gateway Ping
+
+        AnsiConsole.WriteLine("执行网关ping测试");
         if (selectedInterface.GetGateways().Length > 0)
         {
             var gateway = selectedInterface.GetGateways().FirstOrDefault(IPAddressExtension.IsV4);
             var address = selectedInterface.GetIpv4Address().FirstOrDefault();
             if (gateway is not null && address is not null)
-                await DoPing(address, gateway, 5, TimeSpan.FromSeconds(5));
+                await DoPing(address, gateway, 3, TimeSpan.FromSeconds(5));
             else
                 AnsiConsole.MarkupLine("[yellow]? 不存在ipv4地址或网关，跳过[/]");
 
@@ -145,12 +183,12 @@ await AnsiConsole.Status()
             address = selectedInterface.GetIPProperties().UnicastAddresses.FirstOrDefault(ip => ip.Address.IsV6() && ip.Address.IsIPv6LinkLocal)?.Address;
 
             if (gateway is not null && address is not null)
-                await DoPing(address, gateway, 5, TimeSpan.FromSeconds(5));
+                await DoPing(address, gateway, 3, TimeSpan.FromSeconds(5));
             else
                 AnsiConsole.MarkupLine("[yellow]? 不存在ipv6地址或网关，跳过[/]");
         }
         else
-            AnsiConsole.MarkupLine("[red]× 不存在网关[/]");
+            AnsiConsole.MarkupLine("[red]× 不存在网关，跳过网关ping测试[/]");
 
         #endregion
     });
@@ -164,7 +202,7 @@ static async Task<bool> DoAuthLogin(string authUrl)
     var username = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]用户名：[/]"));
     var password = AnsiConsole.Prompt(new TextPrompt<string>("[yellow]密  码：[/]").Secret());
 
-    var auth = AuthContext.Create(authUrl, true);
+    var auth = AuthContext.Create(authUrl);
     try
     {
         var (success, message) = await auth.LoginAsync(username, password);
@@ -181,18 +219,36 @@ static async Task<bool> DoAuthLogin(string authUrl)
 static async Task DoPing(IPAddress? src, IPAddress dest, int count, TimeSpan timeout)
 {
     AnsiConsole.MarkupLine($"正在{(src is not null ? $"从 [aqua]{src}[/] " : "")}向 [aqua]{dest}[/] 发起 [yellow]{count}[/] 次ping请求，请求超时时间为 [yellow]{timeout.TotalSeconds}[/]s");
+    long min = long.MaxValue, max = long.MinValue, sum = 0;
+    var failCount = 0;
     for (var i = 1; i <= count; i++)
     {
         var pingResult = await NetworkCheckToolBox.PingAsync(dest, src, timeout, CancellationToken.None);
         var success = pingResult is { IsSuccess: true, Data.Status: IPStatus.Success };
         var reply = pingResult.Data;
+        string msg;
+        if (!success)
+        {
+            failCount += 1;
+            msg = $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
+        }
+        else
+        {
+            msg = $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]Bytes 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms";
+            sum += reply.RoundtripTime;
+            min = Math.Min(min, reply.RoundtripTime);
+            max = Math.Max(max, reply.RoundtripTime);
+        }
+        AnsiConsole.MarkupLine($"[[{i}/{count}]] {msg}");
 
-        AnsiConsole.Markup($"[[{i}/{count}]] ");
-        var msg = success
-            ? $"[green]成功[/] <-- [aqua]{reply.Address}[/] 载荷：[yellow]{reply.Buffer.Length}[/]Bytes 延迟：{reply.RoundtripTime.Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms"
-            : $"[red]失败[/]：{reply.Status.FriendlyOutput()}";
-        AnsiConsole.MarkupLine(msg);
+        // Delay 1 second except the last one
+        if (i != count)
+            await Task.Delay(1000);
     }
+
+    AnsiConsole.MarkupLine("[magenta]统计信息：[/]");
+    AnsiConsole.MarkupLine($"发包：{count}，收包：{count - failCount}，丢包：{failCount}");
+    AnsiConsole.MarkupLine($"最小延迟：{min}ms，最大延迟：{max}ms，平均延迟：{(sum / (count - failCount)).Paint(10, 30, Color.Green, Color.Yellow, Color.Red)}ms");
 }
 
 static void LogDebug(string message) => AnsiConsole.MarkupLine($"[grey][[debug]] {message}[/]");
@@ -205,7 +261,7 @@ static string FriendlyNetworkExceptionMessage(Exception ex)
 
     if (socketException is not null)
     {
-        return "Socket Exception: " + socketException.SocketErrorCode switch
+        return $"Socket异常: " + socketException.SocketErrorCode switch
         {
             SocketError.HostNotFound => "找不到主机",
             SocketError.ConnectionRefused => "连接被拒绝",
