@@ -53,7 +53,7 @@ public class DnsEx
         var timeoutCancellationTokenSource = new CancellationTokenSource();
 
         // Send dns query data
-        Logging.Debug($"[[dns]] 向 {client.Client.RemoteEndPoint} 发出dns请求，id为{dnsPacket.Header.Id}");
+        Logging.Debug($"[[dns]]  > 向 {client.Client.RemoteEndPoint} 发出dns请求，id为{dnsPacket.Header.Id}");
         await client.SendAsync(ms.GetBuffer(), (int)ms.Length);
         var udpReceiveTask = client.ReceiveAsync(timeoutCancellationTokenSource.Token);
         timeoutCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(30));  // 30 seconds timeout

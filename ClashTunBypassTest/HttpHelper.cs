@@ -24,17 +24,18 @@ public static class HttpHelper
 
     static HttpHelper()
     {
-        _httpHandler = new SocketsHttpHandler()
+        _httpHandler = new SocketsHttpHandler
         {
             UseProxy = false,
-            Proxy = null
+            Proxy = null,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
         };
         _httpClient = new HttpClient(_httpHandler);
     }
 
     public static async Task DownloadTo(Uri uri, Stream dest)
     {
-        Logging.Debug($"[[http]] 向{uri}发送Get请求");
+        Logging.Debug($"[[http]] 向{uri}发送Get请求，超时时间为{_httpHandler.ConnectTimeout.TotalSeconds}s");
         var response = await _httpClient.GetAsync(uri);
         response.EnsureSuccessStatusCode();
         Logging.Debug($"[[http]] 从{uri}接收到响应，正在写入到目标流，大小：{response.Content.Headers.ContentLength}bytes");

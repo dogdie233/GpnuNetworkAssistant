@@ -99,7 +99,7 @@ try
 }
 catch (Exception ex)
 {
-    AnsiConsole.WriteLine("[red]下载文件时发生异常[/]");
+    AnsiConsole.MarkupLine("[red]下载文件时发生异常[/]");
     AnsiConsole.WriteException(ex);
     Exit();
 }
